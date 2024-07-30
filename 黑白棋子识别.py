@@ -1,14 +1,14 @@
 import sensor, image, time, pyb,math,display
 from pyb import UART, LED,Pin, Timer
 #阈值待调
-black_thresholds = (29, 97, 14, 127, -128, 127)
-white_thresholds = (0, 100, -128, 127, -128, 127)
+black_thresholds = (0, 15, -128, 127, -128, 127)
+white_thresholds = (64, 100, -128, 127, -128, 127)
 
 rect_flag = 1 #执照一次矩形
 rect_points_flag  = 1 #矩形点识别一次标志位
 
 
-sensor.set_windowing((42, 96, 60, 64))
+
 
 
 
@@ -21,6 +21,7 @@ sensor.set_vflip(True)
 sensor.skip_frames(time = 2000)     # Wait for settings take effect.
 sensor.set_auto_gain(False) # 必须关闭自动增益以进行颜色追踪
 sensor.set_auto_whitebal(False) # 必须关闭白平衡以进行颜色追踪0
+sensor.set_windowing((320, 382, 240, 206))
 clock = time.clock()
 
 lcd = display.SPIDisplay() # 初始化lcd屏幕
@@ -38,15 +39,27 @@ def change_condi(corners_list):
     if corners is not None:
         return corners
 
-#打印颠倒后的矩形四个顶点坐标，并返回矩形矩形顶点
-def find_rect_corners(rect,img):
+# 打印颠倒后的矩形四个顶点坐标，并返回画面中最大的矩形顶点
+def find_rect_corners(rect, img):
+    max_rect = None
+    max_area = 0
+
     for r in rect:
-        #img.draw_rectangle(r.rect(), color = (255, 0, 0))
-        corners = change_condi(r.corners())
+        area = r.w() * r.h()  # 计算矩形的面积
+        if area > max_area:
+            max_area = area
+            max_rect = r
+
+    if max_rect is not None:
+        corners = change_condi(max_rect.corners())
+        print("rect.magnitude:",max_rect.magnitude())
         for p in corners:  # 颠倒点的顺序
-            img.draw_cross(p[0], p[1], 5, color = (0, 255, 0))
-        print(corners)#打印顶点[(x1,y1),................]
-    return corners
+            img.draw_cross(p[0], p[1], 5, color=(0, 255, 0))
+        print(corners)  # 打印顶点[(x1,y1),................]
+        return corners
+    else:
+        return None
+
 
 #矩形分割函数
 def divide_polygon_segments(points, n):#如[(0.0, 0.0), (10.0, 1.2), (20.0, 2.4), (30.0, 3.6), (40.0, 4.8), (50.0, 6.0), (50.0, 6.0), (48.0, 10.8)]  
@@ -136,33 +149,42 @@ rect_points = [
 ]
 draw_rectangles(rect_points)'''
 
+kernel_size = 1 # 3x3==1, 5x5==2, 7x7==3, etc.
+
+kernel = [-2, -1,  0, \
+          -1,  1,  1, \
+           0,  1,  2]
+
 while(True):
     clock.tick()                    # Update the FPS clock.
+    
     img = sensor.snapshot()         # Take a picture and return the image.
+    img.morph(kernel_size, kernel)
     #黑
-    black_blobs = img.find_blobs([black_thresholds],x_stride=5, y_stride=5, pixels_threshold=10,merge = True) 
-    if black_blobs:
-        black_blob = max(black_blobs, key=lambda b: b.pixels())
-        print("x:%d,y:%d,w:%d,h:%d"%(black_blob.cx(),black_blob.cy(),black_blob.w(),black_blob.h()))
-        img.draw_rectangle(black_blob.rect())
-        print("像素数量：%d"%black_blob.pixels())
+    black_blobs = img.find_blobs([black_thresholds],x_stride=5, y_stride=5, pixels_threshold=800,merge = True) 
+    for blob in black_blobs:
+        print("x:%d,y:%d,w:%d,h:%d"%(blob.cx(),blob.cy(),blob.w(),blob.h()))
+        img.draw_rectangle(blob.rect(),color = (0,0,255))
+        print("黑色像素数量：%d"%blob.pixels())
         lcd.write(img) # 拍照并显示图像 
     lcd.write(img) # 拍照并显示图像  
+      
     #白
-    white_blobs = img.find_blobs([white_thresholds],x_stride=5, y_stride=5, pixels_threshold=10,merge = True) 
-    if white_blobs:
-        white_blob = max(white_blobs, key=lambda b: b.pixels())
-        print("x:%d,y:%d,w:%d,h:%d"%(white_blob.cx(),white_blob.cy(),white_blob.w(),white_blob.h()))
-        img.draw_rectangle(white_blob.rect())
-        print("像素数量：%d"%white_blob.pixels())
+    white_blobs = img.find_blobs([white_thresholds],x_stride=5, y_stride=5, pixels_threshold=800,merge = True) 
+    for blob in white_blobs:
+        print("x:%d,y:%d,w:%d,h:%d"%(blob.cx(),blob.cy(),blob.w(),blob.h()))
+        img.draw_rectangle(blob.rect(),color = (255,0,0))
+        print("白色像素数量：%d"%blob.pixels())
         lcd.write(img) # 拍照并显示图像 
     lcd.write(img) # 拍照并显示图像      
 
     #找到矩形后不再继续找
     if rect_flag == 1:
-        rect = img.find_rects(threshold=17000)
+        rect = img.find_rects(threshold=65000)
+                                
         if rect:
             corners = find_rect_corners(rect, img)
+            
             if corners:
                 rect_flag = 0
         else:
@@ -191,4 +213,3 @@ while(True):
         draw_rectangles(img,rect_points_transform)
     
 
- 
