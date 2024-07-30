@@ -2,14 +2,10 @@ import sensor, image, time, pyb,math,display
 from pyb import UART, LED,Pin, Timer
 #阈值待调
 black_thresholds = (0, 15, -128, 127, -128, 127)
-white_thresholds = (64, 100, -128, 127, -128, 127)
+white_thresholds = (66, 100, -128, 127, -128, 127)
 
 rect_flag = 1 #执照一次矩形
 rect_points_flag  = 1 #矩形点识别一次标志位
-
-
-
-
 
 
 
@@ -21,7 +17,7 @@ sensor.set_vflip(True)
 sensor.skip_frames(time = 2000)     # Wait for settings take effect.
 sensor.set_auto_gain(False) # 必须关闭自动增益以进行颜色追踪
 sensor.set_auto_whitebal(False) # 必须关闭白平衡以进行颜色追踪0
-sensor.set_windowing((320, 382, 240, 206))
+sensor.set_windowing((335, 271, 317, 308))
 clock = time.clock()
 
 lcd = display.SPIDisplay() # 初始化lcd屏幕
@@ -159,28 +155,26 @@ while(True):
     clock.tick()                    # Update the FPS clock.
     
     img = sensor.snapshot()         # Take a picture and return the image.
-    img.morph(kernel_size, kernel)
-    #黑
-    black_blobs = img.find_blobs([black_thresholds],x_stride=5, y_stride=5, pixels_threshold=800,merge = True) 
+    img.erode(2)
+    #img.morph(kernel_size, kernel)
+    
+    # 识别黑色圆形
+    black_blobs = img.find_blobs([black_thresholds], x_stride=5, y_stride=5, pixels_threshold=800)
     for blob in black_blobs:
-        print("x:%d,y:%d,w:%d,h:%d"%(blob.cx(),blob.cy(),blob.w(),blob.h()))
-        img.draw_rectangle(blob.rect(),color = (0,0,255))
-        print("黑色像素数量：%d"%blob.pixels())
-        lcd.write(img) # 拍照并显示图像 
-    lcd.write(img) # 拍照并显示图像  
-      
-    #白
-    white_blobs = img.find_blobs([white_thresholds],x_stride=5, y_stride=5, pixels_threshold=800,merge = True) 
+        if blob.roundness() > 0.4: # 判断是否为圆形
+            img.draw_circle(blob.cx(), blob.cy(), 25, color=(0,0,255))
+            print("黑色圆形位置: x=%d, y=%d, r=%d" % (blob.cx(), blob.cy(), 25))
+            print("黑色像素数量：%d" % blob.pixels())
+    # 识别白色圆形
+    white_blobs = img.find_blobs([white_thresholds], x_stride=10, y_stride=10, pixels_threshold=800)
     for blob in white_blobs:
-        print("x:%d,y:%d,w:%d,h:%d"%(blob.cx(),blob.cy(),blob.w(),blob.h()))
-        img.draw_rectangle(blob.rect(),color = (255,0,0))
-        print("白色像素数量：%d"%blob.pixels())
-        lcd.write(img) # 拍照并显示图像 
-    lcd.write(img) # 拍照并显示图像      
+            img.draw_circle(blob.cx(), blob.cy(), 25, color=(255,0,0))
+            print("白色圆形位置: x=%d, y=%d, r=%d" % (blob.cx(), blob.cy(), 25))
+            print("白色像素数量：%d" % blob.pixels())
 
     #找到矩形后不再继续找
     if rect_flag == 1:
-        rect = img.find_rects(threshold=65000)
+        rect = img.find_rects(threshold=100000)
                                 
         if rect:
             corners = find_rect_corners(rect, img)
@@ -212,4 +206,4 @@ while(True):
     if rect_points_flag == 0:
         draw_rectangles(img,rect_points_transform)
     
-
+    #通过识别最大黑色色块的旋转角度来判断矩形旋转角度   
