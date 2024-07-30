@@ -1,7 +1,7 @@
 import sensor, image, time, pyb,math,display
 from pyb import UART, LED,Pin, Timer
 #阈值待调
-black_thresholds = (0, 15, -128, 127, -128, 127)
+black_thresholds = (0, 10, -128, 127, -128, 127)
 white_thresholds = (66, 100, -128, 127, -128, 127)
 
 rect_flag = 1 #执照一次矩形
@@ -11,13 +11,13 @@ rect_points_flag  = 1 #矩形点识别一次标志位
 
 sensor.reset()                      # Reset and initialize the sensor.
 sensor.set_pixformat(sensor.RGB565) # Set pixel format to RGB565 (or GRAYSCALE)
-sensor.set_framesize(sensor.SVGA)   # Set frame size to QQVGA2 (128x160)
+sensor.set_framesize(sensor.VGA)   # Set frame size to QQVGA2 (128x160)
 sensor.set_hmirror(True)
 sensor.set_vflip(True)
 sensor.skip_frames(time = 2000)     # Wait for settings take effect.
 sensor.set_auto_gain(False) # 必须关闭自动增益以进行颜色追踪
 sensor.set_auto_whitebal(False) # 必须关闭白平衡以进行颜色追踪0
-sensor.set_windowing((335, 271, 317, 308))
+sensor.set_windowing((306, 167, 146, 150))
 clock = time.clock()
 
 lcd = display.SPIDisplay() # 初始化lcd屏幕
@@ -155,26 +155,29 @@ while(True):
     clock.tick()                    # Update the FPS clock.
     
     img = sensor.snapshot()         # Take a picture and return the image.
-    img.erode(2)
-    #img.morph(kernel_size, kernel)
+    
+    img.morph(kernel_size, kernel)
     
     # 识别黑色圆形
-    black_blobs = img.find_blobs([black_thresholds], x_stride=5, y_stride=5, pixels_threshold=800)
+    black_blobs = img.find_blobs([black_thresholds], x_stride=5, y_stride=5, pixels_threshold=100)
     for blob in black_blobs:
-        if blob.roundness() > 0.4: # 判断是否为圆形
+        if blob.roundness() > 0.55: # 判断是否为圆形
             img.draw_circle(blob.cx(), blob.cy(), 25, color=(0,0,255))
             print("黑色圆形位置: x=%d, y=%d, r=%d" % (blob.cx(), blob.cy(), 25))
             print("黑色像素数量：%d" % blob.pixels())
+    if  black_blobs:
+        print("黑色圆形的数量：",len(black_blobs))     
     # 识别白色圆形
-    white_blobs = img.find_blobs([white_thresholds], x_stride=10, y_stride=10, pixels_threshold=800)
+    white_blobs = img.find_blobs([white_thresholds], x_stride=10, y_stride=10, pixels_threshold=100)
     for blob in white_blobs:
             img.draw_circle(blob.cx(), blob.cy(), 25, color=(255,0,0))
             print("白色圆形位置: x=%d, y=%d, r=%d" % (blob.cx(), blob.cy(), 25))
             print("白色像素数量：%d" % blob.pixels())
-
+    if  white_blobs:
+        print("白色圆形的数量：",len(white_blobs))  
     #找到矩形后不再继续找
     if rect_flag == 1:
-        rect = img.find_rects(threshold=100000)
+        rect = img.find_rects(threshold=80000)
                                 
         if rect:
             corners = find_rect_corners(rect, img)
